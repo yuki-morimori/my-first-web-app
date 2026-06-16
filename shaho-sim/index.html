@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>役員報酬・社会保険シミュレーター</title>
+<style>
+  :root{
+    --ink:#1C2A39; --accent:#1F5C8B; --copper:#B5713A; --light:#EEF3F7;
+    --light2:#FBF3EA; --gray:#5A6573; --line:#C9D4DE; --warn:#9A3B2E; --warnbg:#FBEDEA;
+    --green:#2E6E4E; --greenbg:#EAF3EE;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;
+    background:var(--light); color:var(--ink); line-height:1.7;
+    padding:16px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:720px;margin:0 auto}
+  header{background:var(--ink);color:#fff;border-radius:14px 14px 0 0;padding:22px 22px 18px}
+  header .bar{height:4px;background:var(--copper);border-radius:2px;width:54px;margin-bottom:12px}
+  header h1{font-size:20px;font-weight:700;letter-spacing:.02em}
+  header p{font-size:12.5px;color:#B9C6D4;margin-top:6px}
+  .card{background:#fff;padding:22px;border-bottom:1px solid var(--line)}
+  .card:last-of-type{border-radius:0 0 14px 14px;border-bottom:none}
+  h2{font-size:14px;color:var(--accent);font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  h2 .dot{width:7px;height:7px;border-radius:50%;background:var(--copper);flex:none}
+  .field{margin-bottom:16px}
+  label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+  label .hint{font-weight:400;color:var(--gray);font-size:11.5px}
+  .inputrow{display:flex;align-items:center;gap:10px}
+  input[type=number]{
+    flex:1;font-size:17px;padding:11px 12px;border:1.5px solid var(--line);
+    border-radius:9px;font-family:inherit;color:var(--ink);background:#fff;-moz-appearance:textfield
+  }
+  input[type=number]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(31,92,139,.12)}
+  .unit{font-size:13px;color:var(--gray);flex:none}
+  .slider{width:100%;margin-top:10px;accent-color:var(--accent)}
+  .toggle{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .toggle button{
+    flex:1;min-width:90px;padding:10px;border:1.5px solid var(--line);background:#fff;
+    border-radius:9px;font-family:inherit;font-size:13px;cursor:pointer;color:var(--gray);transition:.15s
+  }
+  .toggle button.on{border-color:var(--accent);background:var(--light);color:var(--accent);font-weight:700}
+  .estimate-badge{display:inline-flex;align-items:center;gap:6px;background:var(--warnbg);color:var(--warn);
+    border:1px solid var(--warn);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;margin-bottom:12px}
+  .estimate-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none}
+  .result{background:var(--light2);border-left:4px solid var(--copper);border-radius:10px;padding:18px;margin-top:4px}
+  .bigrow{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .bigrow:last-child{border-bottom:none}
+  .bigrow .k{font-size:13px;color:var(--ink)}
+  .bigrow .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+  .total{background:var(--ink);color:#fff;border-radius:10px;padding:16px 18px;margin-top:14px}
+  .total .lbl{font-size:12px;color:#B9C6D4}
+  .total .amt{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .total .sub{font-size:11.5px;color:#9FB1C2;margin-top:4px}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .split .box{background:#fff;border:1px solid var(--line);border-radius:9px;padding:12px}
+  .split .box .t{font-size:11.5px;color:var(--gray)}
+  .split .box .n{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:3px}
+  .note{background:var(--warnbg);border-left:4px solid var(--warn);border-radius:10px;padding:14px;margin-top:16px}
+  .note .h{font-size:12.5px;font-weight:700;color:var(--warn);margin-bottom:5px}
+  .note ul{margin-left:16px}
+  .note li{font-size:11.8px;color:var(--ink);margin-bottom:3px;line-height:1.55}
+  .rates{font-size:11px;color:var(--gray);margin-top:10px;line-height:1.6}
+  .rates b{color:var(--ink)}
+  footer{text-align:center;font-size:10.5px;color:var(--gray);margin:16px 0}
+  details{margin-top:10px}
+  summary{font-size:12px;color:var(--accent);cursor:pointer;font-weight:700}
+  details p{font-size:11.5px;color:var(--gray);margin-top:6px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="bar"></div>
+    <h1>役員報酬・社会保険シミュレーター</h1>
+    <p>ひとり法人の「報酬額」から、毎月の社会保険料の目安を試算する概算ツールです</p>
+  </header>
+
+  <div class="card">
+    <h2><span class="dot"></span>1. 条件を入力</h2>
+
+    <div class="field">
+      <label>役員報酬（月額）<span class="hint">／ 1か月あたりの額面</span></label>
+      <div class="inputrow">
+        <input type="number" id="salary" value="200000" min="0" step="1000">
+        <span class="unit">円／月</span>
+      </div>
+      <input type="range" class="slider" id="salarySlider" min="0" max="600000" step="5000" value="200000">
+    </div>
+
+    <div class="field">
+      <label>年齢</label>
+      <div class="toggle" id="ageToggle">
+        <button data-age="under40" class="on">40歳未満</button>
+        <button data-age="40to64">40〜64歳</button>
+      </div>
+      <p class="rates" style="margin-top:6px">40〜64歳は介護保険料（1.62%）が上乗せされます。40歳未満は対象外です。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="dot"></span>2. 試算結果（月額の目安）</h2>
+    <div class="estimate-badge">これは概算です（正確な額は協会けんぽの保険料額表で確認）</div>
+    <div class="result" id="result"></div>
+
+    <div class="total">
+      <div class="lbl">あなた（被保険者）が毎月負担する社会保険料の概算（本人分）</div>
+      <div class="amt" id="selfTotal">―</div>
+      <div class="sub">＋ 会社も同額前後を負担します（労使折半）</div>
+    </div>
+
+    <div class="split">
+      <div class="box"><div class="t">本人負担（給与から天引き）</div><div class="n" id="selfN">―</div></div>
+      <div class="box"><div class="t">会社負担</div><div class="n" id="compN">―</div></div>
+    </div>
+    <div class="split" style="grid-template-columns:1fr">
+      <div class="box"><div class="t">本人＋会社の合計（=会社が実際に出すお金）</div><div class="n" id="grandN">―</div></div>
+    </div>
+
+    <div class="rates" id="rateNote"></div>
+  </div>
+
+  <div class="card" style="border-radius:0 0 14px 14px">
+    <h2><span class="dot"></span>3. 読み方のヒント</h2>
+    <div id="hints"></div>
+    <details>
+      <summary>計算の前提を見る</summary>
+      <p id="assump"></p>
+    </details>
+    <div class="note">
+      <div class="h">必ずお読みください</div>
+      <ul>
+        <li>これは概算です。標準報酬月額は区切りの良い等級に当てはめて決まるため、実際の額は等級表により数百円〜数千円ずれます。</li>
+        <li>保険料率は毎年度改定されます。下の率は2026年度・協会けんぽ千葉支部の例です。最新の率と等級表は年金事務所・協会けんぽで必ず確認してください。</li>
+        <li>子ども・子育て支援金は2026年4月分から健康保険料とあわせて徴収される新しい負担です。会社の所在地・制度改定により変わります。</li>
+        <li>本ツールは税務・社会保険の助言ではありません。正式な手続きは専門家・公的窓口へ。</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>役員報酬・社会保険シミュレーター ／ 自走の実務シリーズ ｜ 制作：＿＿＿＿＿　Web：＿＿＿＿＿</footer>
+</div>
+
+<script>
+  // ===== 2026年度（令和8年度）料率：協会けんぽ千葉支部の例 =====
+  // 出典確認：厚生年金18.3%固定／千葉 健保9.73%／子育支援金0.23%／介護1.62%（いずれも労使折半）
+  const RATE = {
+    pension: 0.183,        // 厚生年金（全国一律）
+    health: 0.0973,        // 健康保険（千葉支部 2026年度）
+    childcare: 0.0023,     // 子ども・子育て支援金（2026年4月分〜）
+    care: 0.0162           // 介護保険（40〜64歳のみ）
+  };
+  // 標準報酬月額の事実上の下限（健保・厚年で最低等級の目安）。下限未満でもここで頭打ち。
+  const FLOOR = 88000;       // 目安：標準報酬月額の最低ライン付近
+  // 厚生年金は標準報酬月額の下限が健保より高い（目安）。簡易化のため共通FLOORで概算。
+
+  const yen = n => "¥" + Math.round(n).toLocaleString("ja-JP");
+
+  let age = "under40";
+
+  const salary = document.getElementById("salary");
+  const slider = document.getElementById("salarySlider");
+
+  function sync(from){
+    if(from==="input") slider.value = Math.min(600000, Math.max(0, salary.value||0));
+    if(from==="slider") salary.value = slider.value;
+    calc();
+  }
+  salary.addEventListener("input", ()=>sync("input"));
+  slider.addEventListener("input", ()=>sync("slider"));
+
+  document.querySelectorAll("#ageToggle button").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      document.querySelectorAll("#ageToggle button").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on"); age = b.dataset.age; calc();
+    });
+  });
+
+  function calc(){
+    const raw = Number(salary.value)||0;
+    // 標準報酬月額の概算：下限で頭打ち（report:報酬がFLOOR未満でもFLOORで計算される点を表現）
+    const base = raw < FLOOR ? FLOOR : raw;
+    const flooredNote = raw>0 && raw < FLOOR;
+
+    const health = base * RATE.health;
+    const child  = base * RATE.childcare;
+    const pension= base * RATE.pension;
+    const care   = age==="40to64" ? base * RATE.care : 0;
+
+    const grandHealth = health + child + care; // 健保系（労使折半対象）
+    const grandTotal = grandHealth + pension;  // 全部（労使折半対象）
+    const self = grandTotal/2;
+    const comp = grandTotal/2;
+
+    document.getElementById("result").innerHTML = `
+      <div class="bigrow"><span class="k">健康保険（${(RATE.health*100).toFixed(2)}%）</span><span class="v">${yen(health)}</span></div>
+      <div class="bigrow"><span class="k">子ども・子育て支援金（${(RATE.childcare*100).toFixed(2)}%）</span><span class="v">${yen(child)}</span></div>
+      ${age==="40to64"?`<div class="bigrow"><span class="k">介護保険（${(RATE.care*100).toFixed(2)}%）</span><span class="v">${yen(care)}</span></div>`:``}
+      <div class="bigrow"><span class="k">厚生年金（${(RATE.pension*100).toFixed(1)}%）</span><span class="v">${yen(pension)}</span></div>
+      <div class="bigrow"><span class="k" style="font-weight:700">合計（本人＋会社）</span><span class="v" style="color:var(--copper)">${yen(grandTotal)}</span></div>
+    `;
+    document.getElementById("selfTotal").textContent = yen(self);
+    document.getElementById("selfN").textContent = yen(self);
+    document.getElementById("compN").textContent = yen(comp);
+    document.getElementById("grandN").textContent = yen(grandTotal);
+
+    document.getElementById("rateNote").innerHTML =
+      `<b>計算に使った標準報酬の目安：</b>${yen(base)}（月額）` +
+      (flooredNote? ` ／ <span style="color:var(--warn)">入力額が下限ライン(約${yen(FLOOR)})を下回るため、下限で計算しています</span>`:``);
+
+    // ヒント
+    let hints = [];
+    if(raw===0){
+      hints.push("報酬を0円にすると社会保険の加入対象から外れることがあります。その場合は会社経由で健康保険・厚生年金に入れず、国民健康保険・国民年金などを自分で検討することになります。");
+    } else if(flooredNote){
+      hints.push("報酬を下げても、保険料は下限ラインで止まります。「下げ続ければ無限に安くなる」わけではない、という点がこの試算で確認できます。");
+    } else {
+      hints.push("報酬を上げると保険料も比例して増えます。手取り・将来の年金額・社会保険料のバランスで決めるのがポイントです。");
+    }
+    hints.push("役員報酬は事業年度の開始から原則3か月以内に決め、その後1年は同額（定期同額給与）にするのが基本です。期の途中で動かすと税務上不利になることがあります。");
+    document.getElementById("hints").innerHTML = hints.map(h=>`<p style="font-size:12.5px;color:var(--ink);margin-bottom:8px">・ ${h}</p>`).join("");
+
+    document.getElementById("assump").textContent =
+      `厚生年金18.3%（全国一律・固定）、健康保険9.73%（協会けんぽ千葉・2026年度）、子ども・子育て支援金0.23%（2026年4月分〜）、介護保険1.62%（40〜64歳のみ）。いずれも労使折半（本人と会社が半分ずつ）。標準報酬月額は本来は等級表に当てはめて決まり、しかも厚生年金（下限の目安88,000円）と健康保険（下限の目安58,000円）で下限等級が異なります。本ツールはこの違いを簡略化し、入力額（下限未満は約88,000円で頭打ち）をそのまま掛けて概算しています。そのため実際の額とは数百円〜数千円ずれます。正確な額は等級表で確認してください。`;
+  }
+
+  calc();
+</script>
+</body>
+</html>
