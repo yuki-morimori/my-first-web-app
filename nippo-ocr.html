@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>日報OCRデモ</title>
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css" rel="stylesheet" />
+  <!-- ブラウザ内OCRエンジン (サーバー不要) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    :root {
+      --accent: #4f7cac;
+      --accent-dark: #3d6189;
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --border: #e0e4e8;
+      --text: #2f2f2f;
+      --muted: #757575;
+    }
+    * , *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    header.page {
+      text-align: center;
+      padding: 24px 16px 12px;
+    }
+    header.page h1 {
+      font-size: 1.4rem;
+      margin: 0 0 6px;
+      color: var(--accent);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    header.page p { margin: 0; color: var(--muted); font-size: .9rem; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .card h2 {
+      font-size: 1rem; margin: 0 0 12px;
+      display: flex; align-items: center; gap: 8px; color: var(--text);
+    }
+
+    .uploaders { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      flex: 1 1 140px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 14px 16px;
+      border: none; border-radius: 12px;
+      background: var(--accent); color: #fff;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      transition: background .15s;
+    }
+    .btn:active { background: var(--accent-dark); }
+    .btn.secondary { background: #eef1f5; color: var(--accent-dark); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    input[type=file] { display: none; }
+
+    #preview { width: 100%; border-radius: 10px; margin-top: 12px; display: none; }
+
+    .progress-wrap { margin-top: 14px; display: none; }
+    .progress-bar {
+      height: 8px; background: #eef1f5; border-radius: 999px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; width: 0%; background: var(--accent);
+      transition: width .2s; border-radius: 999px;
+    }
+    .progress-label { font-size: .8rem; color: var(--muted); margin-top: 6px; }
+
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+    .field input, .field textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: 10px; font-size: 1rem; background: #fff; color: var(--text);
+      font-family: inherit;
+    }
+    .field textarea { min-height: 120px; resize: vertical; }
+    textarea#rawText { min-height: 160px; width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-size: .95rem; font-family: inherit; }
+
+    .row { display: flex; gap: 12px; }
+    .row .field { flex: 1; }
+
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+    .hidden { display: none !important; }
+    .hint { font-size: .8rem; color: var(--muted); margin-top: 10px; }
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      background: #2f2f2f; color: #fff; padding: 10px 18px; border-radius: 999px;
+      font-size: .9rem; opacity: 0; transition: opacity .25s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    footer.page { text-align: center; color: var(--muted); font-size: .75rem; padding: 8px 0 24px; }
+    footer.page a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="page">
+      <h1><span class="ri-scan-2-line"></span>日報OCRデモ</h1>
+      <p>日報の写真から文字を読み取り、項目を自動で振り分けます。<br>すべてブラウザ内で処理され、画像はどこにも送信されません。</p>
+    </header>
+
+    <!-- 1. 画像入力 -->
+    <div class="card">
+      <h2><span class="ri-camera-line"></span>1. 日報の画像を選ぶ</h2>
+      <div class="uploaders">
+        <button class="btn" id="cameraBtn"><span class="ri-camera-line"></span>カメラで撮影</button>
+        <button class="btn secondary" id="fileBtn"><span class="ri-image-line"></span>画像を選択</button>
+      </div>
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" />
+      <input type="file" id="fileInput" accept="image/*" />
+      <img id="preview" alt="プレビュー" />
+      <button class="btn hidden" id="runBtn" style="margin-top:12px;"><span class="ri-magic-line"></span>OCRを実行する</button>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label" id="progressLabel">準備中...</div>
+      </div>
+      <p class="hint">※ 初回はOCRエンジン(日本語データ)の読み込みに少し時間がかかります。明るく・まっすぐ撮ると精度が上がります。</p>
+    </div>
+
+    <!-- 2. 抽出結果 -->
+    <div class="card hidden" id="resultCard">
+      <h2><span class="ri-file-list-3-line"></span>2. 読み取り結果(編集できます)</h2>
+
+      <div class="row">
+        <div class="field">
+          <label>日付</label>
+          <input type="text" id="f_date" placeholder="例: 2026/06/16" />
+        </div>
+        <div class="field">
+          <label>担当者</label>
+          <input type="text" id="f_author" placeholder="例: 森森 ゆうき" />
+        </div>
+      </div>
+      <div class="field">
+        <label>作業内容</label>
+        <textarea id="f_work" placeholder="本文から自動抽出されます"></textarea>
+      </div>
+      <div class="field">
+        <label>所感 / 連絡事項</label>
+        <textarea id="f_note" placeholder="本文から自動抽出されます"></textarea>
+      </div>
+
+      <div class="field">
+        <label>読み取った全文(生データ)</label>
+        <textarea id="rawText"></textarea>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="copyBtn"><span class="ri-clipboard-line"></span>日報をコピー</button>
+        <button class="btn secondary" id="resetBtn"><span class="ri-refresh-line"></span>やり直す</button>
+      </div>
+    </div>
+
+    <footer class="page">
+      Powered by <a href="https://github.com/naptha/tesseract.js" target="_blank" rel="noopener">Tesseract.js</a> ・ ブラウザ完結型デモ
+    </footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const cameraInput = $('cameraInput');
+    const fileInput = $('fileInput');
+    const preview = $('preview');
+    const runBtn = $('runBtn');
+    const progressWrap = $('progressWrap');
+    const progressFill = $('progressFill');
+    const progressLabel = $('progressLabel');
+    const resultCard = $('resultCard');
+
+    let currentImage = null;
+
+    $('cameraBtn').addEventListener('click', () => cameraInput.click());
+    $('fileBtn').addEventListener('click', () => fileInput.click());
+    cameraInput.addEventListener('change', onFile);
+    fileInput.addEventListener('change', onFile);
+
+    function onFile(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      currentImage = file;
+      const url = URL.createObjectURL(file);
+      preview.src = url;
+      preview.style.display = 'block';
+      runBtn.classList.remove('hidden');
+      resultCard.classList.add('hidden');
+    }
+
+    runBtn.addEventListener('click', runOCR);
+
+    async function runOCR() {
+      if (!currentImage) return;
+      runBtn.disabled = true;
+      progressWrap.style.display = 'block';
+      setProgress(0, 'OCRエンジンを準備中...');
+
+      try {
+        const { data } = await Tesseract.recognize(currentImage, 'jpn', {
+          logger: (m) => {
+            if (m.status === 'recognizing text') {
+              setProgress(Math.round(m.progress * 100), '文字を認識中... ' + Math.round(m.progress * 100) + '%');
+            } else {
+              setProgress(progressFill.style.width ? parseInt(progressFill.style.width) : 5, statusJa(m.status));
+            }
+          }
+        });
+        // 日本語OCRは単語間に余分な空白が入りやすいので整形
+        const text = (data.text || '').replace(/[ \t]+/g, '').replace(/\n{3,}/g, '\n\n').trim();
+        fillResults(text);
+        setProgress(100, '完了しました');
+        resultCard.classList.remove('hidden');
+        resultCard.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        console.error(err);
+        setProgress(0, 'エラーが発生しました: ' + err.message);
+        toast('読み取りに失敗しました');
+      } finally {
+        runBtn.disabled = false;
+      }
+    }
+
+    function statusJa(s) {
+      const map = {
+        'loading tesseract core': 'コアを読み込み中...',
+        'initializing tesseract': '初期化中...',
+        'loading language traineddata': '日本語データを読み込み中...',
+        'initializing api': 'API初期化中...',
+        'recognizing text': '文字を認識中...'
+      };
+      return map[s] || s;
+    }
+
+    function setProgress(pct, label) {
+      progressFill.style.width = pct + '%';
+      progressLabel.textContent = label;
+    }
+
+    // 全文から日報項目を推定して振り分ける
+    function fillResults(text) {
+      $('rawText').value = text;
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+      // 日付の抽出
+      const dateMatch = text.match(/(\d{4}[\/\.\-年]\s*\d{1,2}[\/\.\-月]\s*\d{1,2}日?)|(\d{1,2}[\/\.月]\s*\d{1,2}日?)/);
+      $('f_date').value = dateMatch ? dateMatch[0].replace(/\s/g, '') : '';
+
+      // 担当者・氏名の抽出
+      const author = matchAfterKeyword(lines, ['担当', '氏名', '名前', '報告者']);
+      $('f_author').value = author;
+
+      // 作業内容
+      const work = collectSection(lines, ['作業内容', '業務内容', '本日の業務', '実施事項', '作業'], ['所感', '連絡', '備考', '明日']);
+      $('f_work').value = work;
+
+      // 所感・連絡事項
+      const note = collectSection(lines, ['所感', '感想', '連絡事項', '連絡', '備考', '明日の予定'], []);
+      $('f_note').value = note;
+
+      // どれにも当てはまらなければ作業内容に全文を入れる
+      if (!work && !note) {
+        $('f_work').value = lines.filter(l => !l.match(/担当|氏名|名前|日付/)).join('\n');
+      }
+    }
+
+    function matchAfterKeyword(lines, keywords) {
+      for (const line of lines) {
+        for (const kw of keywords) {
+          const idx = line.indexOf(kw);
+          if (idx !== -1) {
+            const after = line.slice(idx + kw.length).replace(/^[:：\s　]+/, '').trim();
+            if (after) return after;
+          }
+        }
+      }
+      return '';
+    }
+
+    function collectSection(lines, startKeywords, stopKeywords) {
+      let collecting = false;
+      const out = [];
+      for (const line of lines) {
+        if (!collecting && startKeywords.some(k => line.includes(k))) {
+          collecting = true;
+          const after = line.replace(new RegExp('.*(' + startKeywords.join('|') + ')[:：\\s　]*'), '').trim();
+          if (after) out.push(after);
+          continue;
+        }
+        if (collecting) {
+          if (stopKeywords.length && stopKeywords.some(k => line.includes(k))) break;
+          out.push(line);
+        }
+      }
+      return out.join('\n').trim();
+    }
+
+    // コピー
+    $('copyBtn').addEventListener('click', async () => {
+      const txt =
+        '【日報】\n' +
+        '日付: ' + $('f_date').value + '\n' +
+        '担当者: ' + $('f_author').value + '\n\n' +
+        '■ 作業内容\n' + $('f_work').value + '\n\n' +
+        '■ 所感 / 連絡事項\n' + $('f_note').value + '\n';
+      try {
+        await navigator.clipboard.writeText(txt);
+        toast('クリップボードにコピーしました');
+      } catch {
+        // フォールバック
+        const ta = document.createElement('textarea');
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        toast('コピーしました');
+      }
+    });
+
+    // リセット
+    $('resetBtn').addEventListener('click', () => {
+      currentImage = null;
+      preview.style.display = 'none';
+      preview.src = '';
+      runBtn.classList.add('hidden');
+      resultCard.classList.add('hidden');
+      progressWrap.style.display = 'none';
+      cameraInput.value = ''; fileInput.value = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    let toastTimer;
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+    }
+  </script>
+</body>
+</html>
