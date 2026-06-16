@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>日報OCRデモ (キーを貼るだけ版)</title>
+  <title>書類OCRデモ (キーを貼るだけ版)</title>
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css" rel="stylesheet" />
   <style>
     :root {
@@ -49,32 +49,33 @@
       width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
       font-size: 1rem; background: #fff; color: var(--text); font-family: inherit;
     }
-    .field textarea { min-height: 90px; resize: vertical; }
-    .row { display: flex; gap: 12px; }
-    .row .field { flex: 1; }
-    .status {
-      margin-top: 14px; display: none; align-items: center; gap: 10px; font-size: .9rem; color: var(--muted);
+    .field textarea { min-height: 80px; resize: vertical; }
+    .fieldrow { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
+    .fieldrow .lab {
+      flex: 0 0 34%; padding: 10px 10px; border: 1px solid var(--border); border-radius: 10px;
+      font-size: .9rem; background: #f3f5f8; color: var(--accent-dark); font-weight: 600;
     }
-    .spinner {
-      width: 18px; height: 18px; border: 2px solid #dfe5ec; border-top-color: var(--accent);
-      border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0;
+    .fieldrow .val { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 1rem; font-family: inherit; }
+    .fieldrow .del { flex: 0 0 auto; border: none; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; padding: 8px 4px; }
+    .doctype {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+      font-size: 1.05rem; font-weight: 700; color: var(--text);
     }
+    .doctype .tag {
+      padding: 3px 12px; border-radius: 999px; background: var(--accent); color: #fff; font-size: .85rem;
+    }
+    .status { margin-top: 14px; display: none; align-items: center; gap: 10px; font-size: .9rem; color: var(--muted); }
+    .spinner { width: 18px; height: 18px; border: 2px solid #dfe5ec; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
     .hidden { display: none !important; }
     .hint { font-size: .8rem; color: var(--muted); margin-top: 10px; }
     .hint a { color: var(--accent); }
-    .errbox {
-      display: none; margin-top: 12px; padding: 12px 14px; border-radius: 10px;
-      background: #fdecec; color: #a23b3b; font-size: .85rem; white-space: pre-wrap;
-    }
+    .errbox { display: none; margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: #fdecec; color: #a23b3b; font-size: .85rem; white-space: pre-wrap; }
     .keyrow { display: flex; gap: 8px; }
     .keyrow input { flex: 1; }
-    .toast {
-      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-      background: #2f2f2f; color: #fff; padding: 10px 18px; border-radius: 999px;
-      font-size: .9rem; opacity: 0; transition: opacity .25s; pointer-events: none;
-    }
+    .addbtn { background: none; border: 1px dashed var(--border); color: var(--accent-dark); border-radius: 10px; padding: 8px 12px; font-size: .85rem; cursor: pointer; width: 100%; margin-bottom: 12px; }
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #2f2f2f; color: #fff; padding: 10px 18px; border-radius: 999px; font-size: .9rem; opacity: 0; transition: opacity .25s; pointer-events: none; }
     .toast.show { opacity: 1; }
     footer.page { text-align: center; color: var(--muted); font-size: .75rem; padding: 8px 0 24px; }
   </style>
@@ -82,9 +83,9 @@
 <body>
   <div class="wrap">
     <header class="page">
-      <h1><span class="ri-sparkling-2-line"></span>日報OCRデモ</h1>
-      <p>日報の写真を Claude(AI)が読み取り、項目を自動で振り分けます。<br>サーバー不要・このページだけで動きます。</p>
-      <span class="badge">キーを貼るだけ版 (Claude Vision)</span>
+      <h1><span class="ri-sparkling-2-line"></span>書類OCRデモ</h1>
+      <p>書類の写真を Claude(AI)が読み取り、種類を判定して項目を抽出します。<br>日報・領収書・請求書・名刺など、種類を問わず対応します。</p>
+      <span class="badge">汎用版 (Claude Vision)</span>
     </header>
 
     <!-- 0. APIキー -->
@@ -99,14 +100,14 @@
       </div>
       <p class="hint">
         キーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> で発行できます。
-        入力したキーは<strong>この端末のブラウザにのみ</strong>保存され、外部には送りません(送り先はAnthropicのAPIだけ)。
+        入力したキーは<strong>この端末のブラウザにのみ</strong>保存され、送り先はAnthropicのAPIだけです。
         共有端末では使い終わったら「キーを消す」を押してください。
       </p>
     </div>
 
     <!-- 1. 画像入力 -->
     <div class="card">
-      <h2><span class="ri-camera-line"></span>1. 日報の画像を選ぶ</h2>
+      <h2><span class="ri-camera-line"></span>1. 書類の画像を選ぶ</h2>
       <div class="uploaders">
         <button class="btn" id="cameraBtn"><span class="ri-camera-line"></span>カメラで撮影</button>
         <button class="btn secondary" id="fileBtn"><span class="ri-image-line"></span>画像を選択</button>
@@ -115,10 +116,7 @@
       <input type="file" id="fileInput" accept="image/*" />
       <img id="preview" alt="プレビュー" />
       <button class="btn hidden" id="runBtn" style="margin-top:12px;"><span class="ri-magic-line"></span>AIで読み取る</button>
-      <div class="status" id="status">
-        <div class="spinner"></div>
-        <span>AIが日報を読み取っています…(10〜20秒ほど)</span>
-      </div>
+      <div class="status" id="status"><div class="spinner"></div><span>AIが書類を読み取っています…(10〜20秒ほど)</span></div>
       <div class="errbox" id="errbox"></div>
       <p class="hint">※ 明るく・正面から撮ると精度が上がります。</p>
     </div>
@@ -126,29 +124,19 @@
     <!-- 2. 結果 -->
     <div class="card hidden" id="resultCard">
       <h2><span class="ri-file-list-3-line"></span>2. 読み取り結果(編集できます)</h2>
-      <div class="row">
-        <div class="field"><label>日付</label><input id="f_date" /></div>
-        <div class="field"><label>作業時間</label><input id="f_hours" /></div>
-      </div>
-      <div class="row">
-        <div class="field"><label>元請け</label><input id="f_prime" /></div>
-        <div class="field"><label>現場名</label><input id="f_site" /></div>
-      </div>
-      <div class="row">
-        <div class="field"><label>担当者</label><input id="f_person" /></div>
-        <div class="field"><label>人工</label><input id="f_mandays" /></div>
-      </div>
-      <div class="field"><label>作業者名</label><input id="f_workers" placeholder="複数はカンマ区切り" /></div>
-      <div class="field"><label>作業内容</label><textarea id="f_work"></textarea></div>
-      <div class="field"><label>備考 / 所感</label><textarea id="f_notes"></textarea></div>
+      <div class="doctype"><span>判定:</span><span class="tag" id="docType">—</span></div>
+      <div class="field"><label>要約</label><textarea id="f_summary" style="min-height:60px"></textarea></div>
+      <div id="fields"></div>
+      <button class="addbtn" id="addField"><span class="ri-add-line"></span> 項目を追加</button>
+      <div class="field"><label>全文</label><textarea id="f_fulltext" style="min-height:160px"></textarea></div>
       <div class="actions">
-        <button class="btn" id="copyBtn"><span class="ri-clipboard-line"></span>日報をコピー</button>
+        <button class="btn" id="copyBtn"><span class="ri-clipboard-line"></span>結果をコピー</button>
         <button class="btn secondary" id="resetBtn"><span class="ri-refresh-line"></span>やり直す</button>
         <button class="btn secondary" id="clearKey"><span class="ri-delete-bin-line"></span>キーを消す</button>
       </div>
     </div>
 
-    <footer class="page">Powered by Claude Vision ・ 日報OCRデモ</footer>
+    <footer class="page">Powered by Claude Vision ・ 書類OCRデモ</footer>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -157,37 +145,49 @@
     const $ = (id) => document.getElementById(id);
     const KEY_STORE = 'anthropic_api_key';
 
-    // 保存済みキーの復元
     $('apiKey').value = localStorage.getItem(KEY_STORE) || '';
     $('saveKey').addEventListener('click', () => {
-      localStorage.setItem(KEY_STORE, $('apiKey').value.trim());
-      toast('APIキーを保存しました');
+      localStorage.setItem(KEY_STORE, $('apiKey').value.trim()); toast('APIキーを保存しました');
     });
     $('clearKey').addEventListener('click', () => {
-      localStorage.removeItem(KEY_STORE); $('apiKey').value = '';
-      toast('APIキーを消しました');
+      localStorage.removeItem(KEY_STORE); $('apiKey').value = ''; toast('APIキーを消しました');
     });
 
+    // 種類を問わない汎用スキーマ
     const SCHEMA = {
       type: "object",
       properties: {
-        date: { type: "string" }, work_hours: { type: "string" },
-        prime_contractor: { type: "string" }, site_name: { type: "string" },
-        person_in_charge: { type: "string" }, man_days: { type: "string" },
-        workers: { type: "array", items: { type: "string" } },
-        work_content: { type: "string" }, company: { type: "string" }, notes: { type: "string" },
+        document_type: { type: "string", description: "書類の種類(例: 作業日報, 領収書, 請求書, 見積書, 名刺, 手書きメモ, その他)" },
+        summary: { type: "string", description: "書類の内容を1〜2文で要約" },
+        fields: {
+          type: "array",
+          description: "書類に記載された主要な項目。種類に応じて適切な見出しを付ける",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "項目名(例: 日付, 金額, 宛名, 現場名 など)" },
+              value: { type: "string", description: "その値" },
+            },
+            required: ["label", "value"],
+            additionalProperties: false,
+          },
+        },
+        full_text: { type: "string", description: "読み取れた全文(レイアウトは適度に整形)" },
       },
-      required: ["date","work_hours","prime_contractor","site_name","person_in_charge",
-                 "man_days","workers","work_content","company","notes"],
+      required: ["document_type", "summary", "fields", "full_text"],
       additionalProperties: false,
     };
-    const PROMPT = `この画像は日本の「作業日報」です。記載内容を読み取り、指定のJSON形式で項目ごとに抽出してください。
-- 手書き・印刷どちらも丁寧に読み取ること。
-- 該当する記載が無い項目は空文字（配列なら空配列）にすること。推測で埋めない。
-- 数値や日付は画像のとおりに転記すること。`;
+
+    const PROMPT = `この画像に写っている書類を読み取ってください。書類の種類は日報・領収書・請求書・見積書・名刺・手書きメモなど何でもあり得ます。
+- まず document_type で種類を判定する。
+- その種類にとって重要な項目を fields として label(項目名)と value(値)のペアで抽出する。項目名は書類に合わせて適切に付ける。
+- summary に内容の要約を1〜2文で書く。
+- full_text に読み取れた全文を入れる。
+- 手書き・印刷どちらも丁寧に読み取り、読めない箇所や該当しない項目は無理に作らない。`;
 
     const cameraInput = $('cameraInput'), fileInput = $('fileInput'), preview = $('preview');
     const runBtn = $('runBtn'), statusEl = $('status'), errbox = $('errbox'), resultCard = $('resultCard');
+    const fieldsEl = $('fields');
     let imgMediaType = 'image/jpeg', imgBase64 = null;
 
     $('cameraBtn').addEventListener('click', () => cameraInput.click());
@@ -203,8 +203,7 @@
       const m = dataUrl.match(/^data:(.+?);base64,(.*)$/);
       imgMediaType = m ? m[1] : 'image/jpeg';
       imgBase64 = m ? m[2] : null;
-      runBtn.classList.remove('hidden');
-      resultCard.classList.add('hidden'); errbox.style.display = 'none';
+      runBtn.classList.remove('hidden'); resultCard.classList.add('hidden'); errbox.style.display = 'none';
     }
 
     function downscale(file, maxEdge, quality) {
@@ -214,13 +213,11 @@
           let { width, height } = img;
           const scale = Math.min(1, maxEdge / Math.max(width, height));
           width = Math.round(width * scale); height = Math.round(height * scale);
-          const c = document.createElement('canvas');
-          c.width = width; c.height = height;
+          const c = document.createElement('canvas'); c.width = width; c.height = height;
           c.getContext('2d').drawImage(img, 0, 0, width, height);
           resolve(c.toDataURL('image/jpeg', quality));
         };
-        img.onerror = reject;
-        img.src = URL.createObjectURL(file);
+        img.onerror = reject; img.src = URL.createObjectURL(file);
       });
     }
 
@@ -230,7 +227,6 @@
       const key = localStorage.getItem(KEY_STORE) || $('apiKey').value.trim();
       if (!key) { errbox.textContent = '先に上のAPIキーを設定してください。'; errbox.style.display = 'block'; return; }
       if (!imgBase64) return;
-
       runBtn.disabled = true; statusEl.style.display = 'flex'; errbox.style.display = 'none';
       try {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -239,12 +235,11 @@
             'content-type': 'application/json',
             'x-api-key': key,
             'anthropic-version': '2023-06-01',
-            // ブラウザから直接呼ぶための公式ヘッダー
             'anthropic-dangerous-direct-browser-access': 'true',
           },
           body: JSON.stringify({
             model: 'claude-opus-4-8',
-            max_tokens: 2048,
+            max_tokens: 4096,
             output_config: { format: { type: 'json_schema', schema: SCHEMA } },
             messages: [{
               role: 'user',
@@ -255,10 +250,7 @@
             }],
           }),
         });
-        if (!res.ok) {
-          const t = await res.text();
-          throw new Error('APIエラー (' + res.status + ')\n' + t.slice(0, 400));
-        }
+        if (!res.ok) { const t = await res.text(); throw new Error('APIエラー (' + res.status + ')\n' + t.slice(0, 400)); }
         const data = await res.json();
         const textBlock = (data.content || []).find((b) => b.type === 'text');
         if (!textBlock) throw new Error('AI応答にテキストがありません');
@@ -274,30 +266,40 @@
       }
     }
 
+    function addFieldRow(label = '', value = '') {
+      const row = document.createElement('div');
+      row.className = 'fieldrow';
+      const lab = document.createElement('input');
+      lab.className = 'lab'; lab.value = label; lab.placeholder = '項目名';
+      const val = document.createElement('input');
+      val.className = 'val'; val.value = value; val.placeholder = '値';
+      const del = document.createElement('button');
+      del.className = 'del'; del.innerHTML = '&times;'; del.title = '削除';
+      del.addEventListener('click', () => row.remove());
+      row.append(lab, val, del);
+      fieldsEl.appendChild(row);
+    }
+    $('addField').addEventListener('click', () => addFieldRow());
+
     function fillResults(d) {
-      $('f_date').value = d.date || '';
-      $('f_hours').value = d.work_hours || '';
-      $('f_prime').value = d.prime_contractor || '';
-      $('f_site').value = d.site_name || '';
-      $('f_person').value = d.person_in_charge || '';
-      $('f_mandays').value = d.man_days || '';
-      $('f_workers').value = Array.isArray(d.workers) ? d.workers.join('、') : (d.workers || '');
-      $('f_work').value = d.work_content || '';
-      $('f_notes').value = d.notes || '';
+      $('docType').textContent = d.document_type || '不明';
+      $('f_summary').value = d.summary || '';
+      $('f_fulltext').value = d.full_text || '';
+      fieldsEl.innerHTML = '';
+      (Array.isArray(d.fields) ? d.fields : []).forEach((f) => addFieldRow(f.label || '', f.value || ''));
+      if (!fieldsEl.children.length) addFieldRow();
     }
 
     $('copyBtn').addEventListener('click', async () => {
-      const txt =
-        '【作業日報】\n' +
-        '日付: ' + $('f_date').value + '\n' +
-        '作業時間: ' + $('f_hours').value + '\n' +
-        '元請け: ' + $('f_prime').value + '\n' +
-        '現場名: ' + $('f_site').value + '\n' +
-        '担当者: ' + $('f_person').value + '\n' +
-        '作業者名: ' + $('f_workers').value + '\n' +
-        '人工: ' + $('f_mandays').value + '\n\n' +
-        '■ 作業内容\n' + $('f_work').value + '\n\n' +
-        '■ 備考 / 所感\n' + $('f_notes').value + '\n';
+      let txt = '【' + ($('docType').textContent || '書類') + '】\n';
+      if ($('f_summary').value) txt += '要約: ' + $('f_summary').value + '\n';
+      txt += '\n';
+      fieldsEl.querySelectorAll('.fieldrow').forEach((r) => {
+        const lab = r.querySelector('.lab').value.trim();
+        const val = r.querySelector('.val').value.trim();
+        if (lab || val) txt += lab + ': ' + val + '\n';
+      });
+      if ($('f_fulltext').value) txt += '\n■ 全文\n' + $('f_fulltext').value + '\n';
       try { await navigator.clipboard.writeText(txt); toast('コピーしました'); }
       catch {
         const ta = document.createElement('textarea');
@@ -308,8 +310,8 @@
 
     $('resetBtn').addEventListener('click', () => {
       imgBase64 = null; preview.style.display = 'none'; preview.src = '';
-      runBtn.classList.add('hidden'); resultCard.classList.add('hidden');
-      errbox.style.display = 'none'; cameraInput.value = ''; fileInput.value = '';
+      runBtn.classList.add('hidden'); resultCard.classList.add('hidden'); errbox.style.display = 'none';
+      cameraInput.value = ''; fileInput.value = ''; fieldsEl.innerHTML = '';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
