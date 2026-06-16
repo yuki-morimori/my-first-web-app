@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>日報OCRデモ (キーを貼るだけ版)</title>
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.5.0/fonts/remixicon.css" rel="stylesheet" />
+  <style>
+    :root {
+      --accent: #4f7cac; --accent-dark: #3d6189; --bg: #f5f7fa; --card: #fff;
+      --border: #e0e4e8; --text: #2f2f2f; --muted: #757575;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.6;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    header.page { text-align: center; padding: 24px 16px 12px; }
+    header.page h1 {
+      font-size: 1.4rem; margin: 0 0 6px; color: var(--accent);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    header.page p { margin: 0; color: var(--muted); font-size: .9rem; }
+    .badge {
+      display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 999px;
+      background: #eef4fb; color: var(--accent-dark); font-size: .75rem; font-weight: 600;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .card h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+    .uploaders { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      flex: 1 1 140px; display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 14px 16px; border: none; border-radius: 12px; background: var(--accent);
+      color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background .15s;
+    }
+    .btn:active { background: var(--accent-dark); }
+    .btn.secondary { background: #eef1f5; color: var(--accent-dark); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    input[type=file] { display: none; }
+    #preview { width: 100%; border-radius: 10px; margin-top: 12px; display: none; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+    .field input, .field textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+      font-size: 1rem; background: #fff; color: var(--text); font-family: inherit;
+    }
+    .field textarea { min-height: 90px; resize: vertical; }
+    .row { display: flex; gap: 12px; }
+    .row .field { flex: 1; }
+    .status {
+      margin-top: 14px; display: none; align-items: center; gap: 10px; font-size: .9rem; color: var(--muted);
+    }
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid #dfe5ec; border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+    .hidden { display: none !important; }
+    .hint { font-size: .8rem; color: var(--muted); margin-top: 10px; }
+    .hint a { color: var(--accent); }
+    .errbox {
+      display: none; margin-top: 12px; padding: 12px 14px; border-radius: 10px;
+      background: #fdecec; color: #a23b3b; font-size: .85rem; white-space: pre-wrap;
+    }
+    .keyrow { display: flex; gap: 8px; }
+    .keyrow input { flex: 1; }
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      background: #2f2f2f; color: #fff; padding: 10px 18px; border-radius: 999px;
+      font-size: .9rem; opacity: 0; transition: opacity .25s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    footer.page { text-align: center; color: var(--muted); font-size: .75rem; padding: 8px 0 24px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="page">
+      <h1><span class="ri-sparkling-2-line"></span>日報OCRデモ</h1>
+      <p>日報の写真を Claude(AI)が読み取り、項目を自動で振り分けます。<br>サーバー不要・このページだけで動きます。</p>
+      <span class="badge">キーを貼るだけ版 (Claude Vision)</span>
+    </header>
+
+    <!-- 0. APIキー -->
+    <div class="card">
+      <h2><span class="ri-key-2-line"></span>0. APIキーを設定(初回だけ)</h2>
+      <div class="field">
+        <label>Anthropic APIキー</label>
+        <div class="keyrow">
+          <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" />
+          <button class="btn secondary" id="saveKey" style="flex:0 0 auto;">保存</button>
+        </div>
+      </div>
+      <p class="hint">
+        キーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> で発行できます。
+        入力したキーは<strong>この端末のブラウザにのみ</strong>保存され、外部には送りません(送り先はAnthropicのAPIだけ)。
+        共有端末では使い終わったら「キーを消す」を押してください。
+      </p>
+    </div>
+
+    <!-- 1. 画像入力 -->
+    <div class="card">
+      <h2><span class="ri-camera-line"></span>1. 日報の画像を選ぶ</h2>
+      <div class="uploaders">
+        <button class="btn" id="cameraBtn"><span class="ri-camera-line"></span>カメラで撮影</button>
+        <button class="btn secondary" id="fileBtn"><span class="ri-image-line"></span>画像を選択</button>
+      </div>
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" />
+      <input type="file" id="fileInput" accept="image/*" />
+      <img id="preview" alt="プレビュー" />
+      <button class="btn hidden" id="runBtn" style="margin-top:12px;"><span class="ri-magic-line"></span>AIで読み取る</button>
+      <div class="status" id="status">
+        <div class="spinner"></div>
+        <span>AIが日報を読み取っています…(10〜20秒ほど)</span>
+      </div>
+      <div class="errbox" id="errbox"></div>
+      <p class="hint">※ 明るく・正面から撮ると精度が上がります。</p>
+    </div>
+
+    <!-- 2. 結果 -->
+    <div class="card hidden" id="resultCard">
+      <h2><span class="ri-file-list-3-line"></span>2. 読み取り結果(編集できます)</h2>
+      <div class="row">
+        <div class="field"><label>日付</label><input id="f_date" /></div>
+        <div class="field"><label>作業時間</label><input id="f_hours" /></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>元請け</label><input id="f_prime" /></div>
+        <div class="field"><label>現場名</label><input id="f_site" /></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>担当者</label><input id="f_person" /></div>
+        <div class="field"><label>人工</label><input id="f_mandays" /></div>
+      </div>
+      <div class="field"><label>作業者名</label><input id="f_workers" placeholder="複数はカンマ区切り" /></div>
+      <div class="field"><label>作業内容</label><textarea id="f_work"></textarea></div>
+      <div class="field"><label>備考 / 所感</label><textarea id="f_notes"></textarea></div>
+      <div class="actions">
+        <button class="btn" id="copyBtn"><span class="ri-clipboard-line"></span>日報をコピー</button>
+        <button class="btn secondary" id="resetBtn"><span class="ri-refresh-line"></span>やり直す</button>
+        <button class="btn secondary" id="clearKey"><span class="ri-delete-bin-line"></span>キーを消す</button>
+      </div>
+    </div>
+
+    <footer class="page">Powered by Claude Vision ・ 日報OCRデモ</footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const KEY_STORE = 'anthropic_api_key';
+
+    // 保存済みキーの復元
+    $('apiKey').value = localStorage.getItem(KEY_STORE) || '';
+    $('saveKey').addEventListener('click', () => {
+      localStorage.setItem(KEY_STORE, $('apiKey').value.trim());
+      toast('APIキーを保存しました');
+    });
+    $('clearKey').addEventListener('click', () => {
+      localStorage.removeItem(KEY_STORE); $('apiKey').value = '';
+      toast('APIキーを消しました');
+    });
+
+    const SCHEMA = {
+      type: "object",
+      properties: {
+        date: { type: "string" }, work_hours: { type: "string" },
+        prime_contractor: { type: "string" }, site_name: { type: "string" },
+        person_in_charge: { type: "string" }, man_days: { type: "string" },
+        workers: { type: "array", items: { type: "string" } },
+        work_content: { type: "string" }, company: { type: "string" }, notes: { type: "string" },
+      },
+      required: ["date","work_hours","prime_contractor","site_name","person_in_charge",
+                 "man_days","workers","work_content","company","notes"],
+      additionalProperties: false,
+    };
+    const PROMPT = `この画像は日本の「作業日報」です。記載内容を読み取り、指定のJSON形式で項目ごとに抽出してください。
+- 手書き・印刷どちらも丁寧に読み取ること。
+- 該当する記載が無い項目は空文字（配列なら空配列）にすること。推測で埋めない。
+- 数値や日付は画像のとおりに転記すること。`;
+
+    const cameraInput = $('cameraInput'), fileInput = $('fileInput'), preview = $('preview');
+    const runBtn = $('runBtn'), statusEl = $('status'), errbox = $('errbox'), resultCard = $('resultCard');
+    let imgMediaType = 'image/jpeg', imgBase64 = null;
+
+    $('cameraBtn').addEventListener('click', () => cameraInput.click());
+    $('fileBtn').addEventListener('click', () => fileInput.click());
+    cameraInput.addEventListener('change', onFile);
+    fileInput.addEventListener('change', onFile);
+
+    async function onFile(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const dataUrl = await downscale(file, 1600, 0.85);
+      preview.src = dataUrl; preview.style.display = 'block';
+      const m = dataUrl.match(/^data:(.+?);base64,(.*)$/);
+      imgMediaType = m ? m[1] : 'image/jpeg';
+      imgBase64 = m ? m[2] : null;
+      runBtn.classList.remove('hidden');
+      resultCard.classList.add('hidden'); errbox.style.display = 'none';
+    }
+
+    function downscale(file, maxEdge, quality) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          const scale = Math.min(1, maxEdge / Math.max(width, height));
+          width = Math.round(width * scale); height = Math.round(height * scale);
+          const c = document.createElement('canvas');
+          c.width = width; c.height = height;
+          c.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(c.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    runBtn.addEventListener('click', runOCR);
+
+    async function runOCR() {
+      const key = localStorage.getItem(KEY_STORE) || $('apiKey').value.trim();
+      if (!key) { errbox.textContent = '先に上のAPIキーを設定してください。'; errbox.style.display = 'block'; return; }
+      if (!imgBase64) return;
+
+      runBtn.disabled = true; statusEl.style.display = 'flex'; errbox.style.display = 'none';
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            // ブラウザから直接呼ぶための公式ヘッダー
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: 'claude-opus-4-8',
+            max_tokens: 2048,
+            output_config: { format: { type: 'json_schema', schema: SCHEMA } },
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: imgMediaType, data: imgBase64 } },
+                { type: 'text', text: PROMPT },
+              ],
+            }],
+          }),
+        });
+        if (!res.ok) {
+          const t = await res.text();
+          throw new Error('APIエラー (' + res.status + ')\n' + t.slice(0, 400));
+        }
+        const data = await res.json();
+        const textBlock = (data.content || []).find((b) => b.type === 'text');
+        if (!textBlock) throw new Error('AI応答にテキストがありません');
+        fillResults(JSON.parse(textBlock.text));
+        resultCard.classList.remove('hidden');
+        resultCard.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        console.error(err);
+        errbox.textContent = '読み取りに失敗しました。\n' + err.message;
+        errbox.style.display = 'block';
+      } finally {
+        statusEl.style.display = 'none'; runBtn.disabled = false;
+      }
+    }
+
+    function fillResults(d) {
+      $('f_date').value = d.date || '';
+      $('f_hours').value = d.work_hours || '';
+      $('f_prime').value = d.prime_contractor || '';
+      $('f_site').value = d.site_name || '';
+      $('f_person').value = d.person_in_charge || '';
+      $('f_mandays').value = d.man_days || '';
+      $('f_workers').value = Array.isArray(d.workers) ? d.workers.join('、') : (d.workers || '');
+      $('f_work').value = d.work_content || '';
+      $('f_notes').value = d.notes || '';
+    }
+
+    $('copyBtn').addEventListener('click', async () => {
+      const txt =
+        '【作業日報】\n' +
+        '日付: ' + $('f_date').value + '\n' +
+        '作業時間: ' + $('f_hours').value + '\n' +
+        '元請け: ' + $('f_prime').value + '\n' +
+        '現場名: ' + $('f_site').value + '\n' +
+        '担当者: ' + $('f_person').value + '\n' +
+        '作業者名: ' + $('f_workers').value + '\n' +
+        '人工: ' + $('f_mandays').value + '\n\n' +
+        '■ 作業内容\n' + $('f_work').value + '\n\n' +
+        '■ 備考 / 所感\n' + $('f_notes').value + '\n';
+      try { await navigator.clipboard.writeText(txt); toast('コピーしました'); }
+      catch {
+        const ta = document.createElement('textarea');
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta); toast('コピーしました');
+      }
+    });
+
+    $('resetBtn').addEventListener('click', () => {
+      imgBase64 = null; preview.style.display = 'none'; preview.src = '';
+      runBtn.classList.add('hidden'); resultCard.classList.add('hidden');
+      errbox.style.display = 'none'; cameraInput.value = ''; fileInput.value = '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    let toastTimer;
+    function toast(msg) {
+      const t = $('toast'); t.textContent = msg; t.classList.add('show');
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+    }
+  </script>
+</body>
+</html>
