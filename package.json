@@ -1,0 +1,10 @@
+{
+  "name": "nippo-ocr-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "日報OCRデモ (Claude Vision バックエンド)",
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest"
+  }
+}
